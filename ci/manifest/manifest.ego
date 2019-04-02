@@ -1,0 +1,175 @@
+<%
+type Buildpack struct {
+  Name string
+  LatestName string
+  OriginalName string
+  ProductSlug string
+  Stacks string
+}
+%>
+
+<%! func ManifestTmpl(w io.Writer, config Config) error %>
+<%% import . "github.com/compozed/travel-agent/models" %%>
+
+<%
+  buildpacks := []Buildpack{
+      { "dotnet-core-buildpack", "dotnet_core_buildpack_latest", "dotnet_core_buildpack", "dotnet-core-buildpack", "cflinuxfs2 cflinuxfs3"},
+      { "binary-buildpack", "binary_buildpack_latest", "binary_buildpack", "binary-buildpack", "cflinuxfs2 cflinuxfs3 windows2012R2 windows2016"},
+      { "go-buildpack", "go_buildpack_latest", "go_buildpack", "go-buildpack", "cflinuxfs2 cflinuxfs3"},
+      { "java-buildpack", "java_buildpack_offline_latest", "java_buildpack_offline", "java-buildpack", "cflinuxfs2 cflinuxfs3"},
+      { "nodejs-buildpack", "nodejs_buildpack_latest", "nodejs_buildpack", "nodejs-buildpack", "cflinuxfs2 cflinuxfs3"},
+      { "php-buildpack", "php_buildpack_latest", "php_buildpack", "php-buildpack", "cflinuxfs2 cflinuxfs3"},
+      { "python-buildpack", "python_buildpack_latest", "python_buildpack", "python-buildpack", "cflinuxfs2 cflinuxfs3"},
+      { "ruby-buildpack", "ruby_buildpack_latest", "ruby_buildpack", "ruby-buildpack", "cflinuxfs2 cflinuxfs3"},
+      { "staticfile-buildpack", "staticfile_buildpack_latest", "staticfile_buildpack", "staticfile-buildpack", "cflinuxfs2 cflinuxfs3"},
+      { "tc-buildpack", "tc_buildpack_latest", "tc_buildpack", "tc-server-buildpack", "cflinuxfs2 cflinuxfs3"},
+    }
+%>
+---
+groups:
+<% for _, env := range config.Envs { %>
+- name: <%= env.Name %>
+  jobs:
+  - staging-regulator
+  - <%= env.Name %>-promoting-regulator
+<% for _, buildpack := range buildpacks { %>
+  - <%= env.Name %>-stage-<%= buildpack.Name %>
+  - <%= env.Name %>-promote-<%= buildpack.Name %>
+<% } %>
+<% } %>
+- name: all
+  jobs:
+<% for _, env := range config.Envs { %>
+  - staging-regulator
+  - <%= env.Name %>-promoting-regulator
+<% for _, buildpack := range buildpacks { %>
+  - <%= env.Name %>-stage-<%= buildpack.Name %>
+  - <%= env.Name %>-promote-<%= buildpack.Name %>
+<% } %>
+<% } %>
+
+jobs:
+- name: staging-regulator
+  plan:
+  - aggregate:
+    - get: sunday
+      trigger: true
+<% for _, buildpack := range buildpacks { %>
+    - get: <%= buildpack.Name %>
+      params:
+        globs: []
+<% } %>
+<% for _, env := range config.Envs { %>
+
+- name: <%= env.Name %>-promoting-regulator
+  plan:
+  - aggregate:
+    - get: saturday
+      trigger: true
+<% for _, buildpack := range buildpacks { %>
+    - get: <%= buildpack.Name %>
+      params:
+        globs: []
+      passed:
+      - <%= env.Name %>-stage-<%= buildpack.Name %>
+<% } %>
+
+<% for _, buildpack := range buildpacks { %>
+
+- name: <%= env.Name %>-stage-<%= buildpack.Name %>
+  serial_groups: [<%= env.Name %>]
+  plan:
+  - aggregate:
+    - get: pipeline
+    - get: buildpack
+      trigger: true
+      params:
+        globs:
+        - "*offline*"
+        - "*cache*"
+      resource: <%= buildpack.Name %>
+      passed:
+      - staging-regulator
+
+  - task: stage
+    file: pipeline/ci/tasks/stage-buildpack.yml
+    params:
+      <<: *<%= env.Name %>_cf_api_params
+      BUILDPACK_NAME: <%= buildpack.LatestName %>
+      STACKS:         <%= buildpack.Stacks %>
+      DEBUG: (( grab meta.<%= env.Name %>.debug || false ))
+
+- name: <%= env.Name %>-promote-<%= buildpack.Name %>
+  serial_groups: [<%= env.Name %>]
+  plan:
+  - aggregate:
+    - get: buildpack
+      params: {globs: []}
+      resource: <%= buildpack.Name %>
+      trigger: true
+      passed:
+      - <%= env.Name %>-promoting-regulator
+    - get: pipeline
+  - task: promote
+    file: pipeline/ci/tasks/promote-buildpack.yml
+    params:
+      <<: *<%= env.Name %>_cf_api_params
+      SOURCE_BUILDPACK_NAME: <%= buildpack.LatestName %>
+      TARGET_BUILDPACK_NAME: <%= buildpack.OriginalName %>
+      STACKS:                <%= buildpack.Stacks %>
+<% } %>
+<% } %>
+
+resources:
+- name: pipeline
+  type: git
+  source:
+    branch:      (( grab meta.pipelines.branch || "master" ))
+    private_key: (( grab meta.pipelines.private_key ))
+    uri:         (( grab meta.pipelines.uri ))
+
+- name: sunday
+  type: time
+  source:
+    interval: 30m
+    start: "12:00 AM"
+    stop: "11:59 PM"
+    location: America/Los_Angeles
+    days: [Sunday]
+
+- name: saturday
+  type: time
+  source:
+    interval: 30m
+    start: "12:00 AM"
+    stop: "11:59 PM"
+    location: America/Los_Angeles
+    days: [Saturday]
+
+
+<% for _, buildpack := range buildpacks { %>
+- name: <%= buildpack.Name %>
+  type: pivnet
+  source:
+    api_token: (( grab meta.pivnet_token ))
+    product_slug: "<%= buildpack.ProductSlug %>"
+<% if buildpack.Name != "java-buildpack" && buildpack.Name  != "tc-buildpack" { %>
+    sort_by: semver
+<% } %>
+<% } %>
+
+resource_types:
+- name: pivnet
+  type: docker-image
+  source:
+    repository: pivotalcf/pivnet-resource
+    tag: latest-final
+
+<% for _, env := range config.Envs { %>
+
+<%= env.Name %>_cf_api_params: &<%= env.Name %>_cf_api_params
+  CF_API_URI:  (( grab meta.<%= env.Name %>.api_domain ))
+  CF_USERNAME: (( grab meta.<%= env.Name %>.cf_username ))
+  CF_PASSWORD: (( grab meta.<%= env.Name %>.cf_password ))
+<% } %>
+
