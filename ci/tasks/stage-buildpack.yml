@@ -31,6 +31,8 @@ params:
   CF_USERNAME:
   CF_PASSWORD:
   BUILDPACK_NAME: # The existing buildpack
+  STACKS:
+  DEBUG:
 
 run:
   path: pipeline/ci/scripts/stage-buildpack.sh

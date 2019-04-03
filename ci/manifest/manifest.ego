@@ -117,6 +117,7 @@ jobs:
       SOURCE_BUILDPACK_NAME: <%= buildpack.LatestName %>
       TARGET_BUILDPACK_NAME: <%= buildpack.OriginalName %>
       STACKS:                <%= buildpack.Stacks %>
+      DEBUG: (( grab meta.<%= env.Name %>.debug || false ))
 <% } %>
 <% } %>
 

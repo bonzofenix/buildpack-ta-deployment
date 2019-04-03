@@ -31,7 +31,8 @@ params:
   CF_PASSWORD:
   SOURCE_BUILDPACK_NAME: # The existing buildpack
   TARGET_BUILDPACK_NAME: # The buildpack that will become the latest
-  OFFSET: 1
+  STACKS:
+  DEBUG:
 
 run:
   path: pipeline/ci/scripts/promote-buildpack.sh
