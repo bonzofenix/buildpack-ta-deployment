@@ -26,6 +26,11 @@ type Buildpack struct {
     }
 %>
 ---
+meta:
+  pipelines:
+    uri:                      https://github.com/bonzofenix/buildpack-ta-deployment.git
+    branch:                   master
+
 groups:
 <% for _, env := range config.Envs { %>
 - name: <%= env.Name %>
@@ -126,7 +131,6 @@ resources:
   type: git
   source:
     branch:      (( grab meta.pipelines.branch || "master" ))
-    private_key: (( grab meta.pipelines.private_key ))
     uri:         (( grab meta.pipelines.uri ))
 
 - name: sunday
