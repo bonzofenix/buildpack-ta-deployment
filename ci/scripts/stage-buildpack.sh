@@ -22,14 +22,15 @@ cf api $CF_API_URI --skip-ssl-validation
 cf auth $CF_USERNAME $CF_PASSWORD
 
 
-buildpack=$(find buildpack/*-$STACK_NAME-*.zip  --print | head -1)
-
-if [[ ! -f buildpack ]]; then
-  buildpack=$(find buildpack/*.zip -print | head -1)
-fi
 
 for STACK_NAME in $STACKS;
 do
+  buildpack=$(find buildpack/*-$STACK_NAME-*.zip  --print | head -1)
+
+  if [[ ! -f buildpack ]]; then
+    buildpack=$(find buildpack/*.zip -print | head -1)
+  fi
+
   set +e
   existing_buildpack=$(cf buildpacks | grep "${BUILDPACK_NAME}\s" | grep "${STACK_NAME}")
   set -e
