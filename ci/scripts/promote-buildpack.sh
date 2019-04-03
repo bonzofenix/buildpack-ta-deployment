@@ -21,23 +21,41 @@ set -eu
 cf api $CF_API_URI --skip-ssl-validation
 cf auth $CF_USERNAME $CF_PASSWORD
 
+function promote(){
+  source_buildpack_name=$1
+  target_buildpack_name=$2
+  stack_name=$3
+
+  echo Enabling buildpack ${source_buildpack_name} ${stack_name}...
+
+  if [ "$stack_name" == null ] ; then
+    set +e
+    old_buildpack=$(cf buildpacks | grep "${target_buildpack_name}\s")
+    set -e
+    cf_args=""
+  else
+    set +e
+    old_buildpack=$(cf buildpacks | grep "${target_buildpack_name}\s" | grep "${stack_name}")
+    set -e
+    cf_args="-s $stack_name"
+  fi
+
+  cf update-buildpack $source_buildpack_name $cf_args --enable
+
+  if [ -n "$old_buildpack" ]; then
+    index=$(echo $old_buildpack | cut -d' ' -f2)
+    name=$(echo $old_buildpack | cut -d' ' -f1)
+
+    cf delete-buildpack -f $target_buildpack_name $cf_args
+
+    echo Updating buildpack ${source_buildpack_name} ${stack_name} index...
+    cf update-buildpack $source_buildpack_name -i $index $cf_args
+  fi
+
+  cf rename-buildpack $source_buildpack_name $target_buildpack_name $cf_args
+}
+
 for STACK_NAME in $STACKS;
 do
-    echo Enabling buildpack ${SOURCE_BUILDPACK_NAME} ${STACK_NAME}...
-    cf update-buildpack $SOURCE_BUILDPACK_NAME -s $STACK_NAME --enable
-
-    set +e
-    old_buildpack=$(cf buildpacks | grep "${TARGET_BUILDPACK_NAME}\s" | grep "${STACK_NAME}")
-    set -e
-    if [ -n "$old_buildpack" ]; then
-      index=$(echo $old_buildpack | cut -d' ' -f2)
-      name=$(echo $old_buildpack | cut -d' ' -f1)
-
-      cf delete-buildpack -f $TARGET_BUILDPACK_NAME -s $STACK_NAME
-
-      echo Updating buildpack ${SOURCE_BUILDPACK_NAME} ${STACK_NAME} index...
-      cf update-buildpack $SOURCE_BUILDPACK_NAME -s $STACK_NAME -i $index
-    fi
-
-    cf rename-buildpack $SOURCE_BUILDPACK_NAME $TARGET_BUILDPACK_NAME -s $STACK_NAME
+  promote $SOURCE_BUILDPACK_NAME $TARGET_BUILDPACK_NAME $STACK_NAME
 done

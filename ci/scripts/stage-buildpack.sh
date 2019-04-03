@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eu
+set -e
 
 [[ "${DEBUG,,}" == "true" ]] && set -x
 
@@ -22,25 +22,60 @@ cf api $CF_API_URI --skip-ssl-validation
 cf auth $CF_USERNAME $CF_PASSWORD
 
 
+function create_or_update(){
+  local buildpack_name=$1
+  local stack_name=$2
+  local existing_buildpack=""
+  local buildpack_zip=""
+
+  if [ "$stack_name" == "null" ]; then
+    set +e
+    existing_buildpack=$(cf buildpacks | grep "${buildpack_name}\s")
+    set -e
+
+    buildpack_zip=$(find buildpack/*.zip | head -1)
+  else
+    set +e
+    existing_buildpack=$(cf buildpacks | grep "${buildpack_name}\s" | grep "${stack_name}")
+    set -e
+
+    buildpack_zip=$(find buildpack/*-$stack_name-*.zip | head -1)
+  fi
+
+  if [ -z "$existing_buildpack" ]; then
+    create $buildpack_name $buildpack_zip
+  else
+    update $buildpack_name $buildpack_zip $stack_name
+  fi
+
+}
+
+function create(){
+  local buildpack_name=$1
+  local buildpack_zip=$2
+
+  count=$(cf buildpacks | grep -E ".zip" -c)
+  new_position=$(expr $count + 1)
+  cf create-buildpack $buildpack_name $buildpack_zip $new_position --enable
+}
+
+function update(){
+  local buildpack_name=$1
+  local buildpack_zip=$2
+  local stack_name=$3
+
+  index=$(echo $existing_buildpack | cut -d' ' -f2 )
+
+  if [ "$stack_name" != "null" ]; then
+    cf_args="$cf_args -s $stack_name"
+  fi
+
+  cf update-buildpack $buildpack_name -p $buildpack_zip -i $index $cf_args --enable
+}
+
 
 for STACK_NAME in $STACKS;
 do
-  buildpack=$(find buildpack/*-$STACK_NAME-*.zip  --print | head -1)
-
-  if [[ ! -f buildpack ]]; then
-    buildpack=$(find buildpack/*.zip -print | head -1)
-  fi
-
-  set +e
-  existing_buildpack=$(cf buildpacks | grep "${BUILDPACK_NAME}\s" | grep "${STACK_NAME}")
-  set -e
-  if [ -z "$existing_buildpack" ]; then
-    COUNT=$(cf buildpacks | grep -E ".zip" -c)
-    NEW_POSITION=$(expr $COUNT + 1)
-    cf create-buildpack $BUILDPACK_NAME $buildpack $NEW_POSITION --enable
-    cf update-buildpack $BUILDPACK_NAME --assign-stack $STACK_NAME -i $NEW_POSITION --enable
-  else
-    index=$(echo $existing_buildpack | cut -d' ' -f2 )
-    cf update-buildpack $BUILDPACK_NAME -p $buildpack -s $STACK_NAME -i $index --enable
-  fi
+  create_or_update $BUILDPACK_NAME $STACK_NAME
 done
+
