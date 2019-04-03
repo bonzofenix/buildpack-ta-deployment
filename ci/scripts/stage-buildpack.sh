@@ -37,6 +37,7 @@ do
     COUNT=$(cf buildpacks | grep --regexp=".zip" --count)
     NEW_POSITION=$(expr $COUNT + 1)
     cf create-buildpack $BUILDPACK_NAME $buildpack $NEW_POSITION --enable
+    cf update-buildpack $BUILDPACK_NAME -p $buildpack -s $STACK_NAME -i $NEW_POSITION --enable
   else
     index=$(echo $existing_buildpack | cut -d' ' -f2 )
     cf update-buildpack $BUILDPACK_NAME -p $buildpack -s $STACK_NAME -i $index --enable
