@@ -22,40 +22,37 @@ cf api $CF_API_URI --skip-ssl-validation
 cf auth $CF_USERNAME $CF_PASSWORD
 
 function promote(){
-  source_buildpack_name=$1
-  target_buildpack_name=$2
-  stack_name=$3
+  target_buildpack_name=$1
+  stack_name=$2
 
-  echo Enabling buildpack ${source_buildpack_name} ${stack_name}...
+  echo Enabling buildpack ${target_buildpack_name} ${stack_name}...
 
   if [ "$stack_name" == null ] ; then
     set +e
-    old_buildpack=$(cf buildpacks | grep "${target_buildpack_name}\s")
+    existing_buildpack=$(cf buildpacks | grep "${target_buildpack_name}\s")
     set -e
     cf_args=""
+
+    buildpack_zip=$(find buildpack/*.zip | head -1)
   else
     set +e
-    old_buildpack=$(cf buildpacks | grep "${target_buildpack_name}\s" | grep "${stack_name}")
+    existing_buildpack=$(cf buildpacks | grep "${target_buildpack_name}\s" | grep "${stack_name}")
     set -e
+
+    buildpack_zip=$(find buildpack/*-$stack_name-*.zip | head -1)
     cf_args="-s $stack_name"
   fi
 
-  cf update-buildpack $source_buildpack_name $cf_args --enable
-
-  if [ -n "$old_buildpack" ]; then
-    index=$(echo $old_buildpack | cut -d' ' -f2)
-    name=$(echo $old_buildpack | cut -d' ' -f1)
-
-    cf delete-buildpack -f $target_buildpack_name $cf_args
-
-    echo Updating buildpack ${source_buildpack_name} ${stack_name} index...
-    cf update-buildpack $source_buildpack_name -i $index $cf_args
+  if [ -z "$existing_buildpack" ]; then
+    count=$(cf buildpacks | grep -E ".zip" -c)
+    new_position=$(expr $count + 1)
+    cf create-buildpack $target_buildpack_name $buildpack_zip $new_position --enable
+  else
+    cf update-buildpack $target_buildpack_name -p $buildpack_zip $cf_args --enable
   fi
-
-  cf rename-buildpack $source_buildpack_name $target_buildpack_name $cf_args
 }
 
 for STACK_NAME in $STACKS;
 do
-  promote $SOURCE_BUILDPACK_NAME $TARGET_BUILDPACK_NAME $STACK_NAME
+  promote $TARGET_BUILDPACK_NAME $STACK_NAME
 done

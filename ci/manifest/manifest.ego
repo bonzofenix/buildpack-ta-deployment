@@ -14,7 +14,7 @@ type Buildpack struct {
 <%
   buildpacks := []Buildpack{
       { "dotnet-core-buildpack", "dotnet_core_buildpack_latest", "dotnet_core_buildpack", "dotnet-core-buildpack", "cflinuxfs2 cflinuxfs3"},
-      { "binary-buildpack", "binary_buildpack_latest", "binary_buildpack", "binary-buildpack", "cflinuxfs2 cflinuxfs3 windows2012R2 windows2016"},
+      { "binary-buildpack", "binary_buildpack_latest", "binary_buildpack", "binary-buildpack", "cflinuxfs2 cflinuxfs3 windows2016"},
       { "go-buildpack", "go_buildpack_latest", "go_buildpack", "go-buildpack", "cflinuxfs2 cflinuxfs3"},
       { "java-buildpack", "java_buildpack_offline_latest", "java_buildpack_offline", "java-buildpack", ""},
       { "nodejs-buildpack", "nodejs_buildpack_latest", "nodejs_buildpack", "nodejs-buildpack", "cflinuxfs2 cflinuxfs3"},
@@ -109,7 +109,10 @@ jobs:
   plan:
   - aggregate:
     - get: buildpack
-      params: {globs: []}
+      params:
+        globs:
+        - "*offline*"
+        - "*cache*"
       resource: <%= buildpack.Name %>
       trigger: true
       passed:
@@ -119,7 +122,6 @@ jobs:
     file: pipeline/ci/tasks/promote-buildpack.yml
     params:
       <<: *<%= env.Name %>_cf_api_params
-      SOURCE_BUILDPACK_NAME: <%= buildpack.LatestName %>
       TARGET_BUILDPACK_NAME: <%= buildpack.OriginalName %>
       STACKS:                <%= buildpack.Stacks %>
       DEBUG: (( grab meta.<%= env.Name %>.debug || false ))
