@@ -103,7 +103,7 @@ jobs:
       BUILDPACK_NAME: <%= buildpack.LatestName %>
       STACKS:         <%= buildpack.Stacks %>
       DEBUG: (( grab meta.<%= env.Name %>.debug || false ))
-
+      CF_STAGING_TIMEOUT: ((grab meta.cf_staging_timeout ))
 - name: <%= env.Name %>-promote-<%= buildpack.Name %>
   serial_groups: [<%= env.Name %>]
   plan:
