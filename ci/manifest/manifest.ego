@@ -64,8 +64,17 @@ jobs:
       params:
         globs: []
 <% } %>
-<% for _, env := range config.Envs { %>
+<% if config.HasFeature("slack_updates") { %>
+  on_failure:
+    put: notify
+    params:
+      channel:  (( grab meta.slack_updates.channel ))
+      username: (( grab meta.slack_updates.username ))
+      icon_url: (( grab meta.slack_updates.failure.icon_url ))
+      text: "Buildpack Pipeline: Staging regulator failed"
+<% } %>
 
+<% for _, env := range config.Envs { %>
 - name: <%= env.Name %>-promoting-regulator
   plan:
   - aggregate:
@@ -78,9 +87,17 @@ jobs:
       passed:
       - <%= env.Name %>-stage-<%= buildpack.Name %>
 <% } %>
+<% if config.HasFeature("slack_updates") { %>
+  on_failure:
+    put: notify
+    params:
+      channel:  (( grab meta.slack_updates.channel ))
+      username: (( grab meta.slack_updates.username ))
+      icon_url: (( grab meta.slack_updates.failure.icon_url ))
+      text: "Buildpack Pipeline: <%= env.Name %> promoting regulator failed"
+<% } %>
 
 <% for _, buildpack := range buildpacks { %>
-
 - name: <%= env.Name %>-stage-<%= buildpack.Name %>
   serial_groups: [<%= env.Name %>]
   plan:
@@ -95,7 +112,6 @@ jobs:
       resource: <%= buildpack.Name %>
       passed:
       - staging-regulator
-
   - task: stage
     file: pipeline/ci/tasks/stage-buildpack.yml
     params:
@@ -104,6 +120,16 @@ jobs:
       STACKS:         <%= buildpack.Stacks %>
       DEBUG: (( grab meta.<%= env.Name %>.debug || false ))
       CF_STAGING_TIMEOUT: ((grab meta.cf_staging_timeout ))
+<% if config.HasFeature("slack_updates") { %>
+  on_failure:
+    put: notify
+    params:
+      channel:  (( grab meta.slack_updates.channel ))
+      username: (( grab meta.slack_updates.username ))
+      icon_url: (( grab meta.slack_updates.failure.icon_url ))
+      text: "Buildpack Pipeline: Staging <%= buildpack.Name %> failed"
+<% } %>
+
 - name: <%= env.Name %>-promote-<%= buildpack.Name %>
   serial_groups: [<%= env.Name %>]
   plan:
@@ -125,6 +151,15 @@ jobs:
       TARGET_BUILDPACK_NAME: <%= buildpack.OriginalName %>
       STACKS:                <%= buildpack.Stacks %>
       DEBUG: (( grab meta.<%= env.Name %>.debug || false ))
+<% if config.HasFeature("slack_updates") { %>
+  on_failure:
+    put: notify
+    params:
+      channel:  (( grab meta.slack_updates.channel ))
+      username: (( grab meta.slack_updates.username ))
+      icon_url: (( grab meta.slack_updates.failure.icon_url ))
+      text: "Buildpack Pipeline: Promote <%= buildpack.Name %> failed"
+<% } %>
 <% } %>
 <% } %>
 
@@ -153,6 +188,12 @@ resources:
     location: America/Los_Angeles
     days: [Saturday]
 
+<% if config.HasFeature("slack_updates") { %>
+- name: notify
+  type: slack-notification
+  source:
+    url: (( grab meta.slack_updates.uri || "" ))
+<% } %>
 
 <% for _, buildpack := range buildpacks { %>
 - name: <%= buildpack.Name %>
@@ -172,6 +213,12 @@ resource_types:
     repository: pivotalcf/pivnet-resource
     tag: latest-final
 
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
 <% for _, env := range config.Envs { %>
 
 <%= env.Name %>_cf_api_params: &<%= env.Name %>_cf_api_params
@@ -179,4 +226,3 @@ resource_types:
   CF_USERNAME: (( grab meta.<%= env.Name %>.cf_username ))
   CF_PASSWORD: (( grab meta.<%= env.Name %>.cf_password ))
 <% } %>
-
