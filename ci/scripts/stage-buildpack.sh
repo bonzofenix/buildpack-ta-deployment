@@ -40,6 +40,7 @@ function create_or_update(){
     set -e
 
     buildpack_zip=$(find buildpack/*-$stack_name-*.zip | head -1)
+    [[ ! -z "$buildpack_zip" ]] || buildpack_zip=$(find buildpack/*.zip | head -1)
   fi
 
   if [ -z "$existing_buildpack" ]; then
