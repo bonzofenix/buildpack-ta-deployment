@@ -40,6 +40,7 @@ function promote(){
     set -e
 
     buildpack_zip=$(find buildpack/*-$stack_name-*.zip | head -1)
+    [[ -z "$buildpack_zip" ]] && buildpack_zip=$(find buildpack/*.zip | head -1)
     cf_args="-s $stack_name"
   fi
 
